@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Manage Cities</title>
+  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-firestore-compat.js"></script>
+  <script src="firebase.js"></script>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <h2>Manage Cities</h2>
+
+  <div id="city-list"></div>
+  <button onclick="showAddCity()">Add New City</button>
+
+  <div id="edit-form" style="display:none; margin-top:20px;">
+    <h3 id="form-title">Edit City</h3>
+
+    <div id="city-name-field" style="display:none;">
+      <input type="text" id="new-city-name" placeholder="City Name">
+    </div>
+    <h3>fee</h3>
+    <input type="text" id="fee" placeholder="Fee">
+    <h3>kmfee</h3>
+    <input type="text" id="kmfee" placeholder="KM Fee">
+    <h3>rainfee</h3>
+    <input type="text" id="rainfee" placeholder="Rain Fee">
+    <h3>rain</h3>
+    <select id="rain">
+      <option value="true">True</option>
+      <option value="false">False</option>
+    </select>
+
+    <br><br>
+
+    <button onclick="saveCity()">Save</button>
+    <button id="delete-button" onclick="deleteCity()" style="display:none; background-color: red; color: white;">Delete City</button>
+
+    <div id="status" style="margin-top:10px;color:green;"></div>
+  </div>
+
+  <script>
+    let selectedCity = null;
+    const cityListDiv = document.getElementById('city-list');
+    const editForm = document.getElementById('edit-form');
+    const cityNameField = document.getElementById('city-name-field');
+    const deleteButton = document.getElementById('delete-button');
+    const statusDiv = document.getElementById('status');
+
+    firebase.auth().onAuthStateChanged(async user => {
+      if (!user) return window.location.href = 'index.html';
+      const tokenResult = await user.getIdTokenResult(true);
+      if (tokenResult.claims.role !== 'admin') {
+        alert("Access denied. Admins only.");
+        return window.location.href = 'index.html';
+      }
+      console.log("Admin access granted.");
+      loadCities();
+    });
+
+    async function loadCities() {
+      const globalDoc = await db.doc('settings/global').get();
+      const cities = globalDoc.data().city || [];
+      cityListDiv.innerHTML = cities.map(c => `<div onclick="selectCity('${c}')" style="cursor:pointer;margin:5px 0;">${c}</div>`).join('');
+    }
+
+    async function selectCity(cityName) {
+      selectedCity = cityName;
+      cityNameField.style.display = "none";
+      editForm.style.display = "block";
+      deleteButton.style.display = "inline-block";
+      cityListDiv.style.display = "none";
+      statusDiv.innerText = '';
+
+      const cityDoc = await db.doc('settings/city').get();
+      const allCities = cityDoc.data() || {};
+
+      const data = allCities[cityName] || {};
+
+      document.getElementById('form-title').innerText = `Edit City: ${cityName}`;
+      document.getElementById('fee').value = data.fee ?? '';
+      document.getElementById('kmfee').value = data.kmfee ?? '';
+      document.getElementById('rainfee').value = data.rainfee ?? '';
+      document.getElementById('rain').value = data.rain ? "true" : "false";
+    }
+
+    function showAddCity() {
+      selectedCity = null;
+      cityNameField.style.display = "block";
+      editForm.style.display = "block";
+      deleteButton.style.display = "none";
+      cityListDiv.style.display = "none";
+      statusDiv.innerText = '';
+
+      document.getElementById('form-title').innerText = "Add New City";
+      document.getElementById('new-city-name').value = '';
+      document.getElementById('fee').value = '';
+      document.getElementById('kmfee').value = '';
+      document.getElementById('rainfee').value = '';
+      document.getElementById('rain').value = 'false';
+    }
+
+    async function saveCity() {
+      const fee = document.getElementById('fee').value.trim();
+      const kmfee = document.getElementById('kmfee').value.trim();
+      const rainfee = document.getElementById('rainfee').value.trim();
+      const rain = document.getElementById('rain').value === "true";
+
+      if (!fee || !kmfee || !rainfee || (selectedCity === null && !document.getElementById('new-city-name').value.trim())) {
+        alert("Fill all fields!");
+        return;
+      }
+
+      if (isNaN(fee) || isNaN(kmfee) || isNaN(rainfee)) {
+        alert("Fee, KM Fee, and Rain Fee must be numbers!");
+        return;
+      }
+
+      let cityName = selectedCity;
+      if (cityName === null) {
+        cityName = document.getElementById('new-city-name').value.trim();
+        const globalRef = db.doc('settings/global');
+        await globalRef.update({
+          city: firebase.firestore.FieldValue.arrayUnion(cityName)
+        });
+      }
+
+      statusDiv.innerText = "Saving...";
+      
+      await db.doc('settings/city').set({
+        [cityName]: {
+          fee: parseInt(fee),
+          kmfee: parseInt(kmfee),
+          rainfee: parseInt(rainfee),
+          rain: rain
+        }
+      }, { merge: true });
+
+      alert("Saved!");
+      editForm.style.display = "none";
+      cityListDiv.style.display = "block";
+      loadCities();
+    }
+
+    async function deleteCity() {
+      if (!selectedCity) return;
+
+      const confirmDelete = confirm(`Are you sure you want to delete city "${selectedCity}"?`);
+      if (!confirmDelete) return;
+
+      try {
+        statusDiv.innerText = "Deleting...";
+
+        await db.doc('settings/city').update({
+          [selectedCity]: firebase.firestore.FieldValue.delete()
+        });
+
+        await db.doc('settings/global').update({
+          city: firebase.firestore.FieldValue.arrayRemove(selectedCity)
+        });
+
+        alert("City deleted successfully!");
+
+        editForm.style.display = "none";
+        cityListDiv.style.display = "block";
+        loadCities();
+      } catch (error) {
+        console.error("Error deleting city:", error);
+        alert("Failed to delete city. Please try again.");
+      }
+    }
+  </script>
+</body>
+</html>

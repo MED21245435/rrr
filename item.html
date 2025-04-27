@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Add Item</title>
+  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-storage-compat.js"></script>
+<script src="firebase.js"></script>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <h2>Add Item</h2>
+  <input type="text" id="item-ar" placeholder="Arabic Name">
+  <input type="text" id="item-fr" placeholder="Frensh Name">
+  <select id="category-select"></select>
+  <input type="file" id="item-image" onchange="previewImage(event)">
+  <img id="preview" style="width:100px;display:none" />
+  <button onclick="saveItem()">Save</button>
+
+  <script src="firebase.js"></script>
+  <script>
+    firebase.auth().onAuthStateChanged(async user => {
+  if (!user) return window.location.href = 'index.html';
+
+  const tokenResult = await user.getIdTokenResult(true); // true = force refresh
+  const role = tokenResult.claims.role;
+
+  if (role !== 'admin') {
+    alert("Access denied. Admins only.");
+    return window.location.href = 'index.html';
+  }
+
+  console.log("Admin access granted.");
+});
+
+
+    function previewImage(e) {
+      const file = e.target.files[0];
+      const img = document.getElementById('preview');
+      img.src = URL.createObjectURL(file);
+      img.style.display = 'block';
+    }
+
+    function generateId() {
+      return Math.random().toString(36).substr(2, 9);
+    }
+
+    async function generateUniqueFileName(folder) {
+      let name;
+      do {
+        name = `${folder}/${generateId()}`;
+      } while (await storage.ref(name).getMetadata().then(() => true).catch(() => false));
+      return name;
+    }
+
+    db.doc("settings/global").get().then(doc => {
+      const cat = doc.data().category || [];
+      const select = document.getElementById('category-select');
+      select.innerHTML = cat.map(c => `<option value="${c}">${c}</option>`).join('');
+    });
+
+    async function saveItem() {
+  const saveButton = document.querySelector("button");
+  saveButton.disabled = true;
+  saveButton.textContent = "Uploading...";
+
+  const ar = document.getElementById('item-ar').value;
+  const fr = document.getElementById('item-fr').value;
+  const cat = document.getElementById('category-select').value;
+  const file = document.getElementById('item-image').files[0];
+
+  if (!ar || !fr || !cat || !file) {
+    alert("Fill all fields!");
+    saveButton.disabled = false;
+    saveButton.textContent = "Save";
+    return;
+  }
+
+  try {
+    const path = await generateUniqueFileName('items');
+    const ref = storage.ref(path);
+    await ref.put(file);
+    const url = await ref.getDownloadURL();
+
+    await db.collection("items").add({
+      "name ar": ar,
+        "name fr": fr,
+        category: cat,
+        image: url
+    });
+
+    alert("Saved!");
+    location.reload();
+  } catch (error) {
+    console.error("Error saving store:", error);
+    alert("An error occurred!");
+    saveButton.disabled = false;
+    saveButton.textContent = "Save";
+  }
+}
+  </script>
+</body>
+</html>

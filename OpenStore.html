@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Import Store</title>
+  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-firestore-compat.js"></script>
+  <script src="firebase.js"></script>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <h2>Import Store</h2>
+
+  <input type="text" id="search-text" placeholder="Enter search text">
+
+  <select id="city-select">
+    <option value="">Select City</option>
+  </select>
+
+  <div>
+    <label><input type="radio" name="search-field" value="name ar" checked> Name AR</label>
+    <label><input type="radio" name="search-field" value="name fr"> Name FR</label>
+    <label><input type="radio" name="search-field" value="phone"> Phone</label>
+  </div>
+
+  <button onclick="importStores()">Import</button>
+  <button onclick="searchStartFalse()">Search Not Started Stores</button>
+
+
+  <div id="store-list" style="margin-top:20px;"></div>
+
+  <script>
+    const citySelect = document.getElementById('city-select');
+    const storeList = document.getElementById('store-list');
+
+    firebase.auth().onAuthStateChanged(async user => {
+      if (!user) return window.location.href = 'index.html';
+      const tokenResult = await user.getIdTokenResult(true);
+      if (tokenResult.claims.role !== 'admin') {
+        alert("Access denied. Admins only.");
+        return window.location.href = 'index.html';
+      }
+      console.log("Admin access granted.");
+      loadCities();
+    });
+
+    async function loadCities() {
+      const globalDoc = await db.doc('settings/global').get();
+      const cities = globalDoc.data().city || [];
+      citySelect.innerHTML += cities.map(c => `<option value="${c}">${c}</option>`).join('');
+    }
+
+    async function importStores() {
+    const searchText = document.getElementById('search-text').value.trim().toLowerCase();
+    const city = citySelect.value;
+    const searchField = document.querySelector('input[name="search-field"]:checked').value;
+
+    if (!searchText || !city) {
+      alert("Please fill all fields!");
+      return;
+    }
+
+    storeList.innerHTML = "Searching...";
+
+    try {
+      const storesSnapshot = await db.collection('stores').where('city', '==', city).get();
+      let matchedStores = [];
+
+      storesSnapshot.forEach(doc => {
+        const data = doc.data();
+        const fieldValue = (data[searchField] || '').toString().toLowerCase(); // convert to string and lowercase
+
+        if (fieldValue.includes(searchText)) { // "contains" search
+          matchedStores.push({
+            nameFr: data["name fr"] || '',
+            nameAr: data["name ar"] || '',
+            phone: data.phone || ''
+          });
+        }
+      });
+
+      if (matchedStores.length === 0) {
+        storeList.innerHTML = "<p>No store found!</p>";
+      } else {
+        storeList.innerHTML = matchedStores.map(store => `
+          <div style="margin-bottom:10px;">
+            ${store.nameFr} - ${store.nameAr}<br>
+            <strong>Phone:</strong> ${store.phone}
+          </div>
+        `).join('');
+      }
+    } catch (error) {
+      console.error("Error importing stores:", error);
+      storeList.innerHTML = "<p>Error fetching stores!</p>";
+    }
+  }
+  async function searchStartFalse() {
+    const city = citySelect.value;
+
+    if (!city) {
+      alert("Please select a city!");
+      return;
+    }
+
+    storeList.innerHTML = "Searching...";
+
+    try {
+      const storesSnapshot = await db.collection('stores')
+        .where('city', '==', city)
+        .where('start', '==', false)
+        .get();
+
+      let matchedStores = [];
+
+      storesSnapshot.forEach(doc => {
+        const data = doc.data();
+        matchedStores.push({
+          id: doc.id,
+          nameFr: data["name fr"] || '',
+          nameAr: data["name ar"] || '',
+          phone: data.phone || ''
+        });
+      });
+
+      if (matchedStores.length === 0) {
+        storeList.innerHTML = "<p>No store found!</p>";
+      } else {
+        storeList.innerHTML = matchedStores.map(store => `
+  <div onclick="goToStore('${store.id}')" style="cursor:pointer;margin-bottom:10px;padding:10px;border:1px solid #ccc;border-radius:8px;">
+    ${store.nameFr} - ${store.nameAr}<br>
+    <strong>Phone:</strong> ${store.phone}
+  </div>
+`).join('');
+
+      }
+    } catch (error) {
+      console.error("Error searching stores:", error);
+      storeList.innerHTML = "<p>Error fetching stores!</p>";
+    }
+  } 
+
+  function goToStore(storeId) {
+  window.location.href = `store.html?id=${storeId}`;
+}
+
+  </script>
+</body>
+</html>

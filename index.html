@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Login</title>
+  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-storage-compat.js"></script>
+<script src="firebase.js"></script>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div id="auth">
+    <input type="text" id="phone-number" placeholder="Enter phone number">
+    <div id="recaptcha-container"></div>
+    <button onclick="sendOTP()">Send OTP</button>
+    <input type="text" id="otp-code" placeholder="Enter OTP">
+    <button onclick="verifyOTP()">Verify</button>
+  </div>
+
+  <script src="firebase.js"></script>
+  <script>
+    firebase.auth().onAuthStateChanged(user => {
+      if (user) window.location.href = 'home.html';
+      else window.recaptchaVerifier = new firebase.auth.RecaptchaVerifier('recaptcha-container');
+    });
+
+    function sendOTP() {
+      const number = document.getElementById('phone-number').value;
+      auth.signInWithPhoneNumber(number, window.recaptchaVerifier)
+        .then(confirmationResult => window.confirmationResult = confirmationResult)
+        .catch(console.error);
+    }
+
+    function verifyOTP() {
+      const code = document.getElementById('otp-code').value;
+      window.confirmationResult.confirm(code)
+        .then(() => window.location.href = 'home.html')
+        .catch(console.error);
+    }
+  </script>
+</body>
+</html>
